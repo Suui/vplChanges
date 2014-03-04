@@ -470,7 +470,7 @@ public:
 		{
 
 			const char * in = cleanText.c_str();
-			reti = regcomp(&expression, in, 0);
+			reti = regcomp(&expression, in, REG_EXTENDED);
 		}else
 		{
 			//No se como pasar flags

@@ -17,16 +17,18 @@ case stringenerate
 when 1
       puts 'Well done!'
 when 2
-      puts "Aasdfasdfaest rasdghasdfalksjdfkals fualskd jfakhsdf"
+
+
+
+      puts "AAC"
 when 3
       puts 9
-    #string=Array.new
-    #for i in 1..10
+   # string=Array.new
+   #for i in 1..10
      # string.push(newChar()).join
     #end
 when 4
-    puts "abc"
+    puts "abbbbbb"
 else
       puts "You just making it up!"
 end
-
