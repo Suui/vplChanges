@@ -1,0 +1,32 @@
+#!/usr/bin/ruby
+
+require 'securerandom'
+
+stringenerate=gets.to_i
+
+def newChar
+        upper=rand(1)
+    if (upper==1)
+        return rand(65..90).to_c
+    else
+        return rand(97..122).to_c
+    end
+end
+
+case stringenerate
+when 1
+      puts 'Well done!'
+when 2
+      puts "Aasdfasdfaest rasdghasdfalksjdfkals fualskd jfakhsdf"
+when 3
+      puts 9
+    #string=Array.new
+    #for i in 1..10
+     # string.push(newChar()).join
+    #end
+when 4
+    puts "abc"
+else
+      puts "You just making it up!"
+end
+
