@@ -436,8 +436,9 @@ class RegularExpressionOutput:public OutputChecker
 {
 	string cleanText;
 	regex_t expression;
-	vector <char> flags;
 	bool withFlags;
+	bool flagI;
+	bool flagM;
 	int reti;
 public:
 	RegularExpressionOutput(const string &text):OutputChecker(text)
@@ -456,43 +457,55 @@ public:
 		{
 			withFlags=true;
 			pos=pos+1;
-			while (pos<clean.size())
+			while (pos<clean.size())//Metodo que identifique los flags
 			{
-				flags.push_back(clean[pos]);
+				switch (clean[pos]){
+					case 'i':
+						flagI=true;
+					break;
+					case 'm':
+						flagM=true;
+					break;
+				default:
+					//rise errors
+					return;
+				}
 				pos++;
 			}
 		}
 	}
 	bool match (const string& output)
 	{
+		const char * in = cleanText.c_str();
 		//Use POSIX-C regrex.h
 		if (!withFlags)
 		{
 
-			const char * in = cleanText.c_str();
+			
 			reti = regcomp(&expression, in, REG_EXTENDED);
 		}else
 		{
-			//No se como pasar flags
-			return true;
+			if (flagI)
+				reti = regcomp(&expression, in, REG_EXTENDED | REG_ICASE);
+			else if (flagM)
+				reti = regcomp(&expression, in, REG_EXTENDED | REG_NEWLINE);
+			else
+				reti = regcomp(&expression, in, REG_EXTENDED | REG_NEWLINE | REG_ICASE);
 		}
 		if (reti==0)
 		{
 			const char * out = output.c_str();
 			reti=regexec(&expression, out, 0, NULL, 0);
 			if (reti==0)
-			{
+			
 				return true;
-			}else if (reti == REG_NOMATCH)
-			{
+			else if (reti == REG_NOMATCH)
+				
 				return false;
-			}else
-			{
+			else
 				//rise errors
 				return false;
-			}
-		}else
-		{
+		}else{
 
 			//rise errors
 			return false;
@@ -511,14 +524,13 @@ public:
 		string clean=Tools::trim(text);
 		if (clean.size()>2&&clean[0]=='/')
 		{
-			return true;
-			/*for (int i = 1; i < clean.size()-1;i++)
+			for (int i = 1; i < clean.size();i++)
 			{
 				if (clean[i]=='/')
 				{
 					return true;
 				}
-			}*/
+			}
 		}
 		return false;
 	}
