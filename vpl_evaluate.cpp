@@ -25,6 +25,7 @@
 #include <cmath>
 #include <execinfo.h>
 #include <regex.h>
+#include <string>
 
 using namespace std;
 
@@ -434,112 +435,29 @@ public:
 */
 class RegularExpressionOutput:public OutputChecker
 {
+	string errorCase;
 	string cleanText;
 	regex_t expression;
-	bool withFlags;
 	bool flagI;
 	bool flagM;
 	int reti;
 public:
-	RegularExpressionOutput(const string &text):OutputChecker(text)
-	{
-		string clean=Tools::trim(text);
-		int pos=1;
-		while (clean[pos] != '/' && pos<clean.size())
-		{
-			pos++;
-		}
-		cleanText=clean.substr(1,pos-1);
-		if (pos+1==clean.size())
-		{
-			withFlags=false;
-		}else
-		{
-			withFlags=true;
-			pos=pos+1;
-			while (pos<clean.size())//Metodo que identifique los flags
-			{
-				switch (clean[pos]){
-					case 'i':
-						flagI=true;
-					break;
-					case 'm':
-						flagM=true;
-					break;
-				default:
-					//rise errors
-					return;
-				}
-				pos++;
-			}
-		}
-	}
-	bool match (const string& output)
-	{
-		const char * in = cleanText.c_str();
-		//Use POSIX-C regrex.h
-		if (!withFlags)
-		{
+	RegularExpressionOutput(const string &text, const string &actualCaseDescription);
+	// Regular Expression compilation (counting on flags) and comparison with the input and output evaluation
+	bool match (const string& output);
+	// Returns the expression without flags nor '/'
+	string studentOutputExpected();	
+	OutputChecker* clone();
 
-			
-			reti = regcomp(&expression, in, REG_EXTENDED);
-		}else
-		{
-			if (flagI)
-				reti = regcomp(&expression, in, REG_EXTENDED | REG_ICASE);
-			else if (flagM)
-				reti = regcomp(&expression, in, REG_EXTENDED | REG_NEWLINE);
-			else
-				reti = regcomp(&expression, in, REG_EXTENDED | REG_NEWLINE | REG_ICASE);
-		}
-		if (reti==0)
-		{
-			const char * out = output.c_str();
-			reti=regexec(&expression, out, 0, NULL, 0);
-			if (reti==0)
-			
-				return true;
-			else if (reti == REG_NOMATCH)
-				
-				return false;
-			else
-				//rise errors
-				return false;
-		}else{
-
-			//rise errors
-			return false;
-		}
-	}
-	
-	string studentOutputExpected(){return cleanText;} // Esto devuelve la expresión sin Flags ni '/'
-	
-	OutputChecker* clone()
-	{
-		return new RegularExpressionOutput(outputExpected());
-	}
-
-	static bool typeMatch(const string& text)
-	{
-		string clean=Tools::trim(text);
-		if (clean.size()>2&&clean[0]=='/')
-		{
-			for (int i = 1; i < clean.size();i++)
-			{
-				if (clean[i]=='/')
-				{
-					return true;
-				}
-			}
-		}
-		return false;
-	}
-	string type(){return "regular expression";}
+	// Tests if it is a regular expression. A regular expressions should be between /../
+	static bool typeMatch(const string& text);
+	string type();
 };
 
 /**
 *Regular Expresions
 */
+
 /**
  * TestCase represents cases of test
  */
@@ -609,11 +527,11 @@ class TestCase {
 			}
 		}
 	}
-	void addOutput(const string &o){
+	void addOutput(const string &o, const string &actualCaseDescription){
 		if(ExactTextOutput::typeMatch(o))
 			this->output.push_back(new ExactTextOutput(o));
 		else if (RegularExpressionOutput::typeMatch(o))
-			this->output.push_back(new RegularExpressionOutput(o));
+			this->output.push_back(new RegularExpressionOutput(o, actualCaseDescription));
 		else if(NumbersOutput::typeMatch(o))
 			this->output.push_back(new NumbersOutput(o));
 		else
@@ -681,7 +599,7 @@ public:
 		this->id = id;
 		this->input = input;
 		for(int i=0;i<output.size(); i++){
-			addOutput(output[i]);
+			addOutput(output[i], caseDescription);
 		}
 		this->caseDescription = caseDescription;
 		this->gradeReduction = gradeReduction;
@@ -1196,6 +1114,127 @@ public:
 
 Evaluation* Evaluation::singlenton = NULL;
 
+/**
+*Regular Expresions
+*/
+RegularExpressionOutput::RegularExpressionOutput(const string &text, const string &actualCaseDescription):OutputChecker(text)
+{
+	errorCase=actualCaseDescription;
+	int pos=1;
+	flagI = false;
+	flagM = false;
+	string clean=Tools::trim(text);
+	while (clean[pos] != '/' && pos<clean.size()) {
+		pos++;
+	}
+	cleanText=clean.substr(1,pos-1);
+	if (pos+1!=clean.size()) {
+		pos=pos+1;
+		
+		// Flag search
+		while (pos<clean.size()) {
+
+			switch (clean[pos]){
+				case 'i':
+					flagI=true;
+					break;
+				case 'm':
+					flagM=true;
+					break;
+				default:
+					Evaluation* p_ErrorTest = Evaluation::getSinglenton();
+				//	string actualCase = p_ErrorTest->getActualCase().getCaseDescription();
+					char wrongFlag = clean[pos];
+					string flagCatch;
+					stringstream ss;
+					ss << wrongFlag;
+					ss >> flagCatch;
+					string errorType = string("Flag Error in case ")+ string(errorCase)+ string (", found a ") + string(flagCatch) + string (" used as a flag, only i and m available");
+					const char* flagError = errorType.c_str();
+					p_ErrorTest->addFatalError(flagError);
+					p_ErrorTest->outputEvaluation();
+					//Stop::setTERMRequested();
+					abort();
+			}
+			pos++;
+		}
+	}
+}
+
+// Regular Expression compilation (counting on flags) and comparison with the input and output evaluation
+bool RegularExpressionOutput::match (const string& output) {
+
+	reti=-1;
+	const char * in = cleanText.c_str();
+	//Use POSIX-C regrex.h
+
+	// Flag compilation
+	if (flagI || flagM) {
+		if (flagM && flagI) {
+			reti = regcomp(&expression, in, REG_EXTENDED | REG_NEWLINE | REG_ICASE);
+		} else if (flagM) {
+			reti = regcomp(&expression, in, REG_EXTENDED | REG_NEWLINE);
+		} else {
+			reti = regcomp(&expression, in, REG_EXTENDED | REG_ICASE);
+		}
+
+	// No flag compilation
+	} else {
+		reti = regcomp(&expression, in, REG_EXTENDED);
+	}
+
+	if (reti == 0) {
+
+		const char * out = output.c_str();
+		reti = regexec(&expression, out, 0, NULL, 0);
+
+		if (reti == 0)
+			return true;
+
+		else if (reti == REG_NOMATCH)	
+			return false;
+
+		else
+			//rise errors
+			return false;
+
+	} else {
+		//rise errors
+		return false;
+	}
+}
+
+// Returns the expression without flags nor '/'
+string RegularExpressionOutput::studentOutputExpected(){return cleanText;} 
+
+OutputChecker* RegularExpressionOutput::clone()
+{
+	return new RegularExpressionOutput(outputExpected(), errorCase);
+}
+
+// Tests if it is a regular expression. A regular expressions should be between /../
+bool RegularExpressionOutput::typeMatch(const string& text)
+{
+	string clean=Tools::trim(text);
+	if (clean.size()>2&&clean[0]=='/')
+	{
+		for (int i = 1; i < clean.size();i++)
+		{
+			if (clean[i]=='/')
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+string RegularExpressionOutput::type(){return "regular expression";}
+
+
+/**
+*Regular Expresions
+*/
+
 void nullSignalCatcher(int n) {
 	//printf("Signal %d\n",n);
 }
@@ -1243,3 +1282,4 @@ int main(int argc, char *argv[], const char **env) {
 	obj->outputEvaluation();
 	return EXIT_SUCCESS;
 }
+
