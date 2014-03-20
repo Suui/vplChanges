@@ -432,6 +432,10 @@ public:
 };
 /**
 *Regular Expresions
+* Implemented by:
+* Daniel José Ojeda Loisel
+* Juan David Vega Rodríguez
+* Miguel Ángel Viera González
 */
 class RegularExpressionOutput:public OutputChecker
 {
@@ -527,7 +531,8 @@ class TestCase {
 			}
 		}
 	}
-	void addOutput(const string &o, const string &actualCaseDescription){
+	void addOutput(const string &o, const string &actualCaseDescription){ 
+	// actualCaseDescripction, used to get current test name for Output recognition 
 		if(ExactTextOutput::typeMatch(o))
 			this->output.push_back(new ExactTextOutput(o));
 		else if (RegularExpressionOutput::typeMatch(o))
@@ -841,11 +846,10 @@ public:
 		const char *INPUT_TAG = "input=";
 		const char *INPUT_END_TAG = "inputend=";
 		const char *OUTPUT_TAG = "output=";
-		const char *OUTPUTREGEX_TAG = "outputregex=";
 		const char *OUTPUT_END_TAG = "outputend=";
 		const char *GRADEREDUCTION_TAG = "gradereduction=";
 		enum {
-			regular, ininput, inoutput,inoutputregex
+			regular, ininput, inoutput
 		} state, newstate;
 		bool inCase = false;
 		vector<string> lines = Tools::splitLines(Tools::readFile(fname));
@@ -913,30 +917,7 @@ public:
 					output += line + "\n";
 					continue; //Next line
 				}
-			} else if (state == inoutputregex) {
-							if (outputEnd.size()) { //Check for end of output
-								size_t pos = line.find(outputEnd);
-								if (pos == string::npos) {
-									output += line + "\n";
-								} else {
-									cutToEndTag(line, outputEnd);
-									output += line;
-									outputs.push_back(output);
-									output = "";
-									state = regular;
-									continue; //Next line
-								}
-							} else if (tag.size() && (tag == INPUT_TAG || tag == OUTPUT_TAG
-									|| tag == GRADEREDUCTION_TAG || tag == CASE_TAG)) {//New valid tag
-								removeLastNL(output);
-								outputs.push_back(output);
-								output = "";
-								state = regular;
-							} else {
-								output += line + "\n";
-								continue; //Next line
-							}
-						}
+			} 
 			if (state == regular && tag.size()) {
 				if (tag == INPUT_TAG) {
 					inCase = true;
@@ -954,15 +935,7 @@ public:
 						state = inoutput;
 						output = value + '\n';
 					}
-				} else if (tag == OUTPUTREGEX_TAG) {
-					inCase = true;
-					if (cutToEndTag(value, outputEnd))
-						outputs.push_back(value);
-					else {
-						state = inoutputregex;
-						output = value + '\n';
-					}
-				} else if (tag == GRADEREDUCTION_TAG) {
+				}else if (tag == GRADEREDUCTION_TAG) {
 					inCase = true;
 					value=Tools::trim(value);
 					//A percent value?
@@ -987,10 +960,10 @@ public:
 			}
 		}
 		//TODO review
-		if (state == inoutput || state == inoutputregex) {
-			removeLastNL(output);
-			outputs.push_back(output);
-		}
+		if (state == inoutput){
+                      removeLastNL(output);
+                      outputs.push_back(output);
+        }
 		if (inCase) { //Last case => save current
 			addTestCase(input, outputs, caseDescription, gradeReduction);
 		}
@@ -1117,8 +1090,7 @@ Evaluation* Evaluation::singlenton = NULL;
 /**
 *Regular Expresions
 */
-RegularExpressionOutput::RegularExpressionOutput(const string &text, const string &actualCaseDescription):OutputChecker(text)
-{
+RegularExpressionOutput::RegularExpressionOutput(const string &text, const string &actualCaseDescription):OutputChecker(text){
 	errorCase=actualCaseDescription;
 	int pos=1;
 	flagI = false;
@@ -1143,7 +1115,6 @@ RegularExpressionOutput::RegularExpressionOutput(const string &text, const strin
 					break;
 				default:
 					Evaluation* p_ErrorTest = Evaluation::getSinglenton();
-				//	string actualCase = p_ErrorTest->getActualCase().getCaseDescription();
 					char wrongFlag = clean[pos];
 					string flagCatch;
 					stringstream ss;
@@ -1153,7 +1124,6 @@ RegularExpressionOutput::RegularExpressionOutput(const string &text, const strin
 					const char* flagError = errorType.c_str();
 					p_ErrorTest->addFatalError(flagError);
 					p_ErrorTest->outputEvaluation();
-					//Stop::setTERMRequested();
 					abort();
 			}
 			pos++;
@@ -1183,23 +1153,36 @@ bool RegularExpressionOutput::match (const string& output) {
 		reti = regcomp(&expression, in, REG_EXTENDED);
 	}
 
-	if (reti == 0) {
+	if (reti == 0){ //Compilation Suscesful
 
 		const char * out = output.c_str();
 		reti = regexec(&expression, out, 0, NULL, 0);
 
-		if (reti == 0)
+		if (reti == 0){//match
 			return true;
-
-		else if (reti == REG_NOMATCH)	
+		}else if (reti == REG_NOMATCH){ //no match
 			return false;
 
-		else
-			//rise errors
-			return false;
+		}else{ //memory Error
+			
+			Evaluation* p_ErrorTest = Evaluation::getSinglenton();
+			string errorType = string("Out of memory error, during maching case ")+ string(errorCase);
+			const char* flagError = errorType.c_str();
+			p_ErrorTest->addFatalError(flagError);
+			p_ErrorTest->outputEvaluation();
+			abort();
+		}
 
-	} else {
-		//rise errors
+	} else {//Compilation error
+		size_t length = regerror (reti, &expression, NULL, 0);
+        char bff [length];
+        (void) regerror (reti, &expression, bff, length);
+		Evaluation* p_ErrorTest = Evaluation::getSinglenton();
+		string errorType = string("Regular Expression compilation error")+string (" in case: ")+ string(errorCase) +string (".\n")+ string(bff);
+		const char* flagError = errorType.c_str();
+		p_ErrorTest->addFatalError(flagError);
+		p_ErrorTest->outputEvaluation();
+		abort();
 		return false;
 	}
 }
@@ -1207,21 +1190,16 @@ bool RegularExpressionOutput::match (const string& output) {
 // Returns the expression without flags nor '/'
 string RegularExpressionOutput::studentOutputExpected(){return cleanText;} 
 
-OutputChecker* RegularExpressionOutput::clone()
-{
+OutputChecker* RegularExpressionOutput::clone(){
 	return new RegularExpressionOutput(outputExpected(), errorCase);
 }
 
 // Tests if it is a regular expression. A regular expressions should be between /../
-bool RegularExpressionOutput::typeMatch(const string& text)
-{
+bool RegularExpressionOutput::typeMatch(const string& text){
 	string clean=Tools::trim(text);
-	if (clean.size()>2&&clean[0]=='/')
-	{
-		for (int i = 1; i < clean.size();i++)
-		{
-			if (clean[i]=='/')
-			{
+	if (clean.size()>2&&clean[0]=='/'){
+		for (int i = 1; i < clean.size();i++){
+			if (clean[i]=='/'){
 				return true;
 			}
 		}
